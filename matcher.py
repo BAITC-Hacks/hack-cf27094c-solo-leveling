@@ -146,10 +146,15 @@ def recommend(raw: dict, catalog: tuple[Contractor, ...] = CATALOG) -> dict:
         else:
             eligible.append(item)
 
-    labels = (("busy", "заняты на дату"), ("over_budget", "дороже бюджета"),
-              ("wrong_format", "не берут формат"), ("too_short", "не хватает часов"),
-              ("wrong_language", "не работают на нужном языке"))
-    exclusions = ", ".join(f"{counts[key]} {label}" for key, label in labels if counts[key])
+    labels = (("busy", "занят на дату", "заняты на дату"),
+              ("over_budget", "дороже бюджета", "дороже бюджета"),
+              ("wrong_format", "не берёт формат", "не берут формат"),
+              ("too_short", "не хватает часов", "не хватает часов"),
+              ("wrong_language", "не работает на нужном языке", "не работают на нужном языке"))
+    exclusions = ", ".join(
+        f"{counts[key]} {_plural(counts[key], one, many, many)}"
+        for key, one, many in labels if counts[key]
+    )
     ranked = sorted((_card(item, query) for item in eligible), key=lambda pair: (-pair[0], pair[1]["id"]))
     cards = [card for _, card in ranked[:3]]
     if not cards:
@@ -159,7 +164,8 @@ def recommend(raw: dict, catalog: tuple[Contractor, ...] = CATALOG) -> dict:
                    f"категории «{query['category']}», но ни один не прошёл условия: {exclusions}.")
     else:
         status = "matched"
-        message = f"Подобрано {len(cards)} из {len(eligible)} подходящих профилей."
+        message = (f"Подобрано {len(cards)} из {len(eligible)} "
+                   f"{_plural(len(eligible), 'подходящего профиля', 'подходящих профилей', 'подходящих профилей')}.")
         if len(cards) < 3:
             message += f" Меньше трёх: в каталоге этой категории {len(subset)}; {exclusions or 'других профилей нет'}."
         elif exclusions:
