@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Подбор подрядчиков · HackAlem AI</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color: #182536; background: #f4f6f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; line-height: 1.5; }
+    header { background: #102b3d; color: white; padding: 35px max(20px, calc((100vw - 1100px)/2)); }
+    header p { color: #c7d9de; max-width: 690px; margin-bottom: 0; }
+    h1 { font-size: clamp(1.7rem, 4vw, 2.5rem); margin: 0; letter-spacing: -.03em; }
+    h2 { font-size: 1.25rem; margin: 0 0 14px; }
+    main { max-width: 1100px; margin: 28px auto 55px; padding: 0 20px; display: grid; grid-template-columns: minmax(270px, 360px) 1fr; gap: 24px; align-items: start; }
+    .panel, .card { background: white; border: 1px solid #dce5e7; border-radius: 14px; box-shadow: 0 4px 20px #132d4010; }
+    .panel { padding: 22px; }
+    label { display: block; font-weight: 650; font-size: .89rem; margin: 14px 0 5px; }
+    input, select { width: 100%; font: inherit; border: 1px solid #b7c7cc; border-radius: 7px; padding: 10px 11px; background: white; color: #182536; }
+    input:focus, select:focus, button:focus-visible { outline: 3px solid #40c4ab; outline-offset: 2px; }
+    small { color: #566b76; display: block; }
+    button { font: inherit; cursor: pointer; border-radius: 7px; }
+    .submit { background: #147761; border: 0; color: white; padding: 12px 18px; width: 100%; font-weight: 700; margin-top: 20px; }
+    .submit:hover { background: #0d5948; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+    .examples button { border: 1px solid #b7c7cc; background: #fff; padding: 6px 10px; color: #1e4a56; }
+    .examples button:hover { background: #e9f7f2; }
+    .result-head { padding: 20px; border-left: 5px solid #167b65; margin-bottom: 16px; }
+    .result-head.empty { border-color: #b67625; }
+    .result-head.error { border-color: #be4a4a; }
+    .result-head p { margin: 0; }
+    .stats { margin-top: 12px; font-size: .88rem; color: #526875; }
+    .card { padding: 20px; margin-bottom: 14px; }
+    .card h3 { margin: 0 0 5px; font-size: 1.18rem; }
+    .meta { color: #4a5d68; font-size: .92rem; margin: 0 0 11px; }
+    .price { font-weight: 750; color: #12634f; font-size: 1.12rem; }
+    .reason { margin: 12px 0 0; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { background: #edf2f4; border-radius: 30px; padding: 3px 9px; font-size: .78rem; color: #3c5562; }
+    .hint { margin-top: 15px; font-size: .85rem; color: #566b76; }
+    @media (max-width: 760px) { main { grid-template-columns: 1fr; margin-top: 18px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Подрядчик под ваше событие</h1>
+    <p>До трёх доступных вариантов с объяснением на основе цены, условий и описания профиля.</p>
+  </header>
+  <main>
+    <section class="panel" aria-labelledby="search-title">
+      <h2 id="search-title">Параметры</h2>
+      <form id="search">
+        <label for="city">Город</label><select name="city" id="city" required></select>
+        <label for="event_date">Дата мероприятия</label><input type="date" name="event_date" id="event_date" required>
+        <label for="event_format">Тип мероприятия</label><select name="event_format" id="event_format" required></select>
+        <label for="category">Категория</label><select name="category" id="category" required></select>
+        <label for="budget">Бюджет, ₸</label><input type="number" name="budget" id="budget" min="1" step="1" required>
+        <label for="hours">Длительность, ч <small>необязательно</small></label><input type="number" name="hours" id="hours" min="1" step="1" placeholder="Например, 6">
+        <label for="language">Язык <small>необязательно</small></label><select name="language" id="language"><option value="">Любой</option></select>
+        <label for="wishes">Пожелание <small>необязательно, слова из описаний профилей</small></label><input type="text" name="wishes" id="wishes" maxlength="120" placeholder="Например, джаз или фотозона">
+        <button class="submit" type="submit">Подобрать</button>
+      </form>
+      <p class="hint" id="calendar"></p>
+    </section>
+    <section aria-labelledby="result-title">
+      <h2 id="result-title">Результат</h2>
+      <small>Быстрые сценарии для проверки:</small>
+      <div class="examples" id="examples">
+        <button type="button" data-example="dense">Ведущие · осень</button>
+        <button type="button" data-example="rare">Флористы · редкая категория</button>
+        <button type="button" data-example="empty">Нет результата</button>
+        <button type="button" data-example="date">Та же заявка · другая дата</button>
+      </div>
+      <div id="results" aria-live="polite" style="margin-top: 20px"></div>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const fields = ['city','event_date','event_format','category','budget','hours','language','wishes'];
+    const examples = {
+      dense: {city:'Алматы',event_date:'2026-10-15',event_format:'свадьба',category:'Ведущий',budget:1500000,hours:'',language:'',wishes:'юмор'},
+      rare: {city:'Алматы',event_date:'2026-11-14',event_format:'свадьба',category:'Флорист',budget:500000,hours:'',language:'',wishes:''},
+      empty: {city:'Астана',event_date:'2026-12-31',event_format:'свадьба',category:'Флорист',budget:500000,hours:'',language:'',wishes:''},
+      date: {city:'Алматы',event_date:'2026-10-16',event_format:'свадьба',category:'Ведущий',budget:1500000,hours:'',language:'',wishes:'юмор'}
+    };
+    const money = value => new Intl.NumberFormat('ru-RU').format(value) + ' ₸';
+    function add(tag, parent, content, className) {
+      const el = document.createElement(tag);
+      if (content !== undefined) el.textContent = content;
+      if (className) el.className = className;
+      parent.append(el); return el;
+    }
+    function fill(id, values) { for (const value of values) { const option = new Option(value, value); $(id).add(option); } }
+    function showError(message) { const root=$('results'); root.replaceChildren(); const panel=add('div',root,undefined,'panel result-head error'); add('p',panel,message); }
+    async function search(event) {
+      if (event) event.preventDefault();
+      const root=$('results'); root.replaceChildren(); add('div',root,'Подбираем…','panel');
+      const params = new URLSearchParams(new FormData($('search')));
+      try {
+        const response = await fetch('/api/recommend?' + params);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Ошибка запроса');
+        root.replaceChildren();
+        const head=add('div',root,undefined,'panel result-head' + (data.status==='matched'?'':' empty'));
+        add('p',head,data.message);
+        if (data.counts.city_category) add('div',head,'В городе и категории: '+data.counts.city_category+' · Заняты на дату: '+data.counts.busy+' · Прошли все условия: '+(data.counts.city_category-Object.entries(data.counts).filter(([key])=>key!=='city_category').reduce((sum,[,count])=>sum+count,0)),'stats');
+        for (const card of data.cards) {
+          const node=add('article',root,undefined,'card');
+          add('h3',node,card.name);
+          add('p',node,card.categories.join(' · ')+' · '+card.city,'meta');
+          add('div',node,'От '+money(card.price_from_kzt),'price');
+          add('p',node,card.explanation,'reason');
+          const tags=add('div',node,undefined,'tags');
+          if (card.synthetic) add('span',tags,'Синтетический профиль','tag');
+          if (card.city_imputed) add('span',tags,'Город восстановлен в датасете','tag');
+          if (card.price_imputed) add('span',tags,'Цена восстановлена в датасете','tag');
+        }
+      } catch(error) { showError(error.message); }
+    }
+    $('search').addEventListener('submit',search);
+    $('examples').addEventListener('click',event => {
+      const example=examples[event.target.dataset.example]; if (!example) return;
+      for (const field of fields) $(field).value=example[field];
+      search();
+    });
+    fetch('/api/options').then(r => r.json()).then(data => {
+      fill('city',data.cities); fill('event_format',data.formats);
+      fill('category',data.categories); fill('language',data.languages);
+      $('event_date').min=data.calendar_start; $('event_date').max=data.calendar_end;
+      $('calendar').textContent='Календарь: '+data.calendar_start+' — '+data.calendar_end+' · '+data.profiles+' профилей.';
+      $('examples').querySelector('[data-example="dense"]').click();
+    }).catch(() => showError('Не удалось загрузить каталог. Перезапустите сервер.'));
+  </script>
+</body>
+</html>
